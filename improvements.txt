@@ -1,0 +1,14 @@
+
+latency tracking:decompose your end-end latency into a detailed budget
+i.e seperately measure ASR latency,LLM time to first tocken,TTS time to first byte and overall overhead
+
+build a visualisation that shows this breakdown for every single request
+
+building resileince
+
+what happens if any service is down?
+you need gracefull degradation strategy
+
+implement timeout handling
+
+build a replay mode where you can feed recorded input back through the pipeline for debugging purpose 
