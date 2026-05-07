@@ -81,92 +81,121 @@ def play_audio_data(audio_data):
         os.remove(tmp_path)
 
 def visualize_budget(m):
-    # Console bar chart: ASR (█), LLM (▒), TTS (░)
-    asr_bar = "█" * int(m['asr_ms'] / 50)
-    llm_bar = "▒" * int(m['llm_ttft_ms'] / 50)
-    tts_bar = "░" * int(m['tts_ttfb_ms'] / 50)
-    print(f"\nLatency Budget: [ASR:{asr_bar}][LLM:{llm_bar}][TTS:{tts_bar}] Total: {m['total_ms']:.0f}ms")
+    # Total perceived latency from end of speech to start of audio
+    print("\n" + "="*30)
+    print(f"LATENCY BREAKDOWN (Total: {m['total_ms']:.0f}ms)")
+    print(f"  1. ASR (VAD -> Text):     {m['asr_ms']:>6.0f}ms")
+    print(f"  2. LLM (Text -> Token 1): {m['llm_ttft_ms']:>6.0f}ms")
+    print(f"  3. TTS (Text -> Byte 1):  {m['tts_ttfb_ms']:>6.0f}ms")
+    print(f"  4. Overhead/Misc:         {m['overhead_ms']:>6.0f}ms")
+    print("="*30)
 
-# --- NEW: AI Logic moved to a separate function for threading ---
+
+# --- UPGRADED: Streaming AI Logic ---
 def process_turn(utterance, start_time, asr_end, microphone):
     try:
-        # 2. LLM Processing (Time to First Token)
         llm_start = time.perf_counter()
         
-        # Format memory for the NEW Google SDK
         conversation_memory.append(
             types.Content(role="user", parts=[types.Part.from_text(text=utterance)])
         )
         
         active_system_prompt = get_active_prompt("receptionist", "v1.1.0")
         
-        # Call Gemini using the new SDK
-        # Note: I changed model to gemini-1.5-flash as 2.5 does not officially exist yet. 
-        # You can update this to gemini-2.0-flash if you have access to it!
-        response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash", 
+        # --- PHASE 1: STREAMING ENABLED ---
+        response_stream = gemini_client.models.generate_content_stream(
+            model="gemini-3-flash-preview", 
             contents=conversation_memory,
             config=types.GenerateContentConfig(
                 system_instruction=active_system_prompt
             )
         )
-        llm_end = time.perf_counter()
         
-        full_text = response.text.strip()
+        full_text = ""
+        sentence_buffer = ""
+        first_token_received = False
         
-        # Save AI response to memory
-        conversation_memory.append(
-            types.Content(role="model", parts=[types.Part.from_text(text=full_text)])
-        )
-        
-        segments = segment_text_by_sentence(full_text)
-        
+        llm_ttft_ms = 0
         tts_ttfb_ms = 0
         perceived_latency_end = 0
         
-        # Cleaned up the nested loop bug here!
-        for i, seg in enumerate(segments):
+        for chunk in response_stream:
+            # Capture true Time To First Token
+            if not first_token_received:
+                llm_ttft_ms = (time.perf_counter() - llm_start) * 1000
+                first_token_received = True
+            
+            chunk_text = chunk.text
+            full_text += chunk_text
+            sentence_buffer += chunk_text
+
+            # Check if we have a complete sentence to speak right now
+            if any(punc in chunk_text for punc in ".!?"):
+                sentences = segment_text_by_sentence(sentence_buffer)
+                
+                if len(sentences) > 1:
+                    to_process = sentences[:-1] # Full sentences ready for TTS
+                    sentence_buffer = sentences[-1] # Keep the trailing fragment
+                else:
+                    to_process = sentences
+                    sentence_buffer = ""
+
+                for seg in to_process:
+                    tts_start = time.perf_counter()
+                    audio = synthesize_audio(seg)
+                    
+                    # Capture true Total Latency when the FIRST audio byte is ready
+                    if tts_ttfb_ms == 0 and audio:
+                        perceived_latency_end = time.perf_counter() 
+                        tts_ttfb_ms = (perceived_latency_end - tts_start) * 1000
+                    
+                    play_audio_data(audio)
+
+        # Process any leftover text after the stream finishes
+        if sentence_buffer.strip():
             tts_start = time.perf_counter()
-            audio = synthesize_audio(seg)
-            
-            # Measure TTFB only for the first segment
-            if i == 0:
-                tts_ttfb_ms = (time.perf_counter() - tts_start) * 1000
-                # True latency stops the millisecond the first audio is ready!
-                perceived_latency_end = time.perf_counter() 
-            
+            audio = synthesize_audio(sentence_buffer)
+            if tts_ttfb_ms == 0 and audio:
+                perceived_latency_end = time.perf_counter()
+                tts_ttfb_ms = (perceived_latency_end - tts_start) * 1000
             play_audio_data(audio)
 
-        # Finish Latency Tracking
+        conversation_memory.append(
+            types.Content(role="model", parts=[types.Part.from_text(text=full_text)])
+        )
+
+        # Metrics Calculation
+        asr_val = (asr_end - start_time) * 1000
+        total_val = (perceived_latency_end - start_time) * 1000
+        overhead_val = total_val - (asr_val + llm_ttft_ms + tts_ttfb_ms)
+
         metrics = {
-            "asr_ms": (asr_end - start_time) * 1000,
-            "llm_ttft_ms": (llm_end - llm_start) * 1000,
+            "asr_ms": asr_val,
+            "llm_ttft_ms": llm_ttft_ms,
             "tts_ttfb_ms": tts_ttfb_ms,
-            "total_ms": (perceived_latency_end - start_time) * 1000
+            "overhead_ms": max(0, overhead_val), 
+            "total_ms": total_val
         }
         
         visualize_budget(metrics)
+        return metrics
 
     except Exception as e:
-        print(f"Fallback triggered due to error: {e}")
-        # Remove the failed user attempt from memory so it doesn't break future turns
+        print(f"Streaming Error: {e}")
         if len(conversation_memory) > 0 and conversation_memory[-1].role == "user":
             conversation_memory.pop()
-            
-        # Fallback response for graceful degradation
         play_audio_data(synthesize_audio("I'm sorry, I'm having a bit of trouble connecting to my brain. Could you repeat that?"))
+        return None
     
     finally:
-        # Always make sure to release the microphone lock when the thread finishes
         time.sleep(0.3)
         microphone.unmute()
         mute_microphone.clear()
 
-
 def main():
     try:
         deepgram = DeepgramClient(DEEPGRAM_API_KEY)
-        dg_connection = deepgram.listen.websocket.v("1") # Fixed the deprecation warning
+        dg_connection = deepgram.listen.websocket.v("1")
         is_finals = []
 
         def on_message(self, result, **kwargs):
@@ -194,7 +223,7 @@ def main():
                     # 1. ASR Finish
                     asr_end = time.perf_counter()
 
-                    # Immediately lock the microphone on the main thread so user can't interrupt AI thinking
+                    # Immediately lock the microphone on the main thread
                     mute_microphone.set()
                     microphone.mute()
                     
@@ -228,5 +257,49 @@ def main():
     except Exception as e:
         print(f"System Error: {e}")
 
+# --- TESTING SUITE ---
+class MockMicrophone:
+    def mute(self): pass
+    def unmute(self): pass
+
+TEST_QUERIES = [
+    {"id": "short_greeting", "text": "Hello."},
+    {"id": "medium_booking", "text": "I would like to book a table for 4 people tonight at 8 PM."},
+    {"id": "long_menu", "text": "Can you tell me all the appetizers you have and their prices?"}
+]
+
+def run_local_baseline():
+    results = []
+    print("Starting Baseline Test Suite...")
+    
+    for query in TEST_QUERIES:
+        print(f"\nRunning: {query['id']}")
+        conversation_memory.clear() 
+        
+        start_time = time.perf_counter()
+        asr_end = start_time + 0.05 # Simulate 50ms ASR completion
+        
+        metrics = process_turn(query['text'], start_time, asr_end, MockMicrophone())
+        
+        if metrics:
+            results.append({
+                "query": query["id"],
+                "total_latency_ms": metrics["total_ms"],
+                "llm_ttft_ms": metrics["llm_ttft_ms"],
+                "tts_ttfb_ms": metrics["tts_ttfb_ms"]
+            })
+            
+            # Wait 60 seconds to avoid Gemini Free Tier limits (429/503 errors)
+            print("Waiting 60 seconds for quota cooldown...")
+            time.sleep(60)
+        else:
+            print("Test failed, waiting 30 seconds before retrying...")
+            time.sleep(30)
+
+    with open("baseline_metrics.json", "w") as f:
+        json.dump(results, f, indent=4)
+    print("Results written to baseline_metrics.json")
+
 if __name__ == "__main__":
-    main()
+    # Run the baseline tester instead of the live mic
+    run_local_baseline()

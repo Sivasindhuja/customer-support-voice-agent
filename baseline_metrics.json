@@ -1,0 +1,20 @@
+[
+    {
+        "query": "short_greeting",
+        "total_latency_ms": 3969.8926999990363,
+        "llm_ttft_ms": 3042.145299998083,
+        "tts_ttfb_ms": 927.5329999982205
+    },
+    {
+        "query": "medium_booking",
+        "total_latency_ms": 5428.420000000187,
+        "llm_ttft_ms": 4468.967600001633,
+        "tts_ttfb_ms": 959.3739999982063
+    },
+    {
+        "query": "long_menu",
+        "total_latency_ms": 4004.828200002521,
+        "llm_ttft_ms": 3178.3876000008604,
+        "tts_ttfb_ms": 826.3796000028378
+    }
+]
