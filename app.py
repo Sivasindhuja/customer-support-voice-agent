@@ -30,6 +30,22 @@ load_dotenv()
 with open("config.json", "r", encoding="utf-8") as f:
     APP_CONFIG = json.load(f)
 
+# class InterviewSession:
+#     def __init__(self, dataset_path="interview_qa.json"):
+#         with open(dataset_path, "r", encoding="utf-8") as f:
+#             self.dataset = json.load(f)
+
+#         self.questions = self.dataset["questions"]
+#         self.current_index = 0
+
+#     def get_current_node(self):
+#         if self.current_index < len(self.questions):
+#             return self.questions[self.current_index]
+#         return None
+
+#     def advance(self):
+#         self.current_index += 1
+
 class InterviewSession:
     def __init__(self, dataset_path="interview_qa.json"):
         with open(dataset_path, "r", encoding="utf-8") as f:
@@ -37,6 +53,9 @@ class InterviewSession:
 
         self.questions = self.dataset["questions"]
         self.current_index = 0
+
+        # NEW: store interview performance
+        self.performance_log = []
 
     def get_current_node(self):
         if self.current_index < len(self.questions):
@@ -46,8 +65,130 @@ class InterviewSession:
     def advance(self):
         self.current_index += 1
 
+    # NEW: save performance per question
+    def add_performance(
+        self,
+        question,
+        candidate_answer,
+        evaluation,
+        strengths,
+        improvements,
+        score,
+    ):
+        self.performance_log.append(
+            {
+                "question": question,
+                "candidate_answer": candidate_answer,
+                "evaluation": evaluation,
+                "strengths": strengths,
+                "improvements": improvements,
+                "score": score,
+            }
+        )
+
 
 interview = InterviewSession()
+
+async def evaluate_candidate_answer(llm, question_data, candidate_answer):
+    """
+    Uses Gemini to evaluate candidate answer
+    and returns structured feedback JSON.
+    """
+
+    evaluation_prompt = f"""
+You are an expert technical interviewer.
+
+Evaluate the candidate answer.
+
+QUESTION:
+{question_data["question_en"]}
+
+IDEAL ANSWER:
+{question_data["ideal_answer"]}
+
+KEYWORDS:
+{", ".join(question_data["keywords"])}
+
+CANDIDATE ANSWER:
+{candidate_answer}
+
+Return STRICT JSON ONLY in this format:
+
+{{
+  "evaluation": "short evaluation",
+  "strengths": ["point1", "point2"],
+  "improvements": ["point1", "point2"],
+  "score": 0-10,
+  "move_next": true_or_false
+}}
+
+Scoring Rules:
+- 9-10 = excellent
+- 7-8 = good
+- 5-6 = partial
+- below 5 = weak
+
+Do NOT include markdown.
+Do NOT include explanation outside JSON.
+"""
+
+    response = await llm.generate(evaluation_prompt)
+
+    raw_text = response.text.strip()
+
+    # Safety cleanup
+    raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+
+    try:
+        parsed = json.loads(raw_text)
+        return parsed
+    except Exception as e:
+        print("[ERROR] Failed to parse evaluation JSON:", e)
+        print(raw_text)
+
+        return {
+            "evaluation": "Evaluation parsing failed.",
+            "strengths": [],
+            "improvements": [],
+            "score": 0,
+            "move_next": True,
+        }
+    
+async def generate_final_feedback(llm):
+    """
+    Generates overall interview summary
+    based on all question evaluations.
+    """
+
+    performance_json = json.dumps(
+        interview.performance_log,
+        indent=2,
+    )
+
+    final_feedback_prompt = f"""
+You are an expert technical interviewer.
+
+Based on the interview performance data below,
+generate a professional structured interview report.
+
+INTERVIEW DATA:
+{performance_json}
+
+Generate:
+
+1. Overall performance summary
+2. Technical strengths
+3. Areas needing improvement
+4. Communication assessment
+5. Suggested learning roadmap
+6. Final overall score out of 10
+
+Keep it professional and concise.
+"""
+
+    response = await llm.generate(final_feedback_prompt)
+
+    return response.text
 
 
 def generate_grounding_system_instruction():
@@ -89,6 +230,7 @@ class LatencyMetricsObserver(BaseObserver):
                 return
             
             for metric in metrics_data:
+
                 if "GoogleLLMService" in metric.processor:
                         print(f"[METRICS] LLM Time to First Token (TTFT): {metric.value:.3f}s")
                 elif "DeepgramTTSService" in metric.processor:
@@ -194,39 +336,137 @@ async def main():
 
     @context_aggregator.assistant().event_handler("on_context_updated")
     async def on_context_updated(_, messages):
+
         if not messages:
             return
 
         last_message = messages[-1]
-        if last_message.get("role") != "assistant":
+
+        if last_message.get("role") != "user":
             return
 
-        text = last_message.get("content", "").lower()
-        print(f"[ASSISTANT]: {text}")
+        candidate_answer = last_message.get("content", "").strip()
 
-        if (
-            "let's move to the next topic" in text
-            or "next question" in text
-        ):
+        current_question = interview.get_current_node()
+
+        if not current_question:
+            return
+
+        print(f"[CANDIDATE]: {candidate_answer}")
+
+        # Evaluate answer
+        evaluation = await evaluate_candidate_answer(
+            llm,
+            current_question,
+            candidate_answer,
+        )
+
+        # Store performance
+        interview.add_performance(
+            question=current_question["question_en"],
+            candidate_answer=candidate_answer,
+            evaluation=evaluation["evaluation"],
+            strengths=evaluation["strengths"],
+            improvements=evaluation["improvements"],
+            score=evaluation["score"],
+        )
+
+        # Speak evaluation
+        response_text = (
+            f"{evaluation['evaluation']} "
+        )
+
+        # Weak answer -> improvement guidance
+        if evaluation["score"] < 5:
+
+            improvement_points = ", ".join(
+                evaluation["improvements"]
+            )
+
+            response_text += (
+                f"You can improve by focusing on: "
+                f"{improvement_points}. "
+            )
+
+        await worker.queue_frame(
+            TTSSpeakFrame(response_text)
+        )
+
+        await asyncio.sleep(2)
+
+        # Move next?
+        if evaluation["move_next"]:
+
             interview.advance()
-            current = interview.get_current_node()
 
-            if current:
+            next_question = interview.get_current_node()
+
+            if next_question:
+
                 new_instruction = generate_grounding_system_instruction()
-                context.set_system_instruction(new_instruction)
-                next_question = current["question_en"]
-                print(f"[INFO] Moving to question {interview.current_index}")
-                await asyncio.sleep(1)
-                await worker.queue_frame(TTSSpeakFrame(next_question))
-            else:
-                await worker.queue_frame(
-                    TTSSpeakFrame("The interview is complete. Thank you.")
+
+                context.set_system_instruction(
+                    new_instruction
                 )
 
-    print("Starting Pipecat Interview Agent...")
-    print(f"Opening Question: {first_question}")
+                await asyncio.sleep(1)
 
-    await runner.run()
+                await worker.queue_frame(
+                    TTSSpeakFrame(
+                        next_question["question_en"]
+                    )
+                )
+
+            else:
+                # FINAL FEEDBACK
+
+                final_feedback = await generate_final_feedback(llm)
+
+                print("\n========== FINAL FEEDBACK ==========")
+                print(final_feedback)
+
+                # Speak short summary
+                await worker.queue_frame(
+                    TTSSpeakFrame(
+                        "The interview is complete. "
+                        "Generating your final feedback now."
+                    )
+                )
+
+                await asyncio.sleep(2)
+
+                await worker.queue_frame(
+                    TTSSpeakFrame(final_feedback[:500])
+                )
+
+                # Save report locally
+                with open(
+                    "interview_feedback.txt",
+                    "w",
+                    encoding="utf-8",
+                ) as f:
+                    f.write(final_feedback)
+
+                print("[INFO] Feedback saved to interview_feedback.txt")
+
+                await asyncio.sleep(3)
+
+                await worker.queue_frame(EndFrame())
+
+        else:
+            # Ask follow-up question
+
+            follow_up = (
+                "Can you explain that in a bit more detail?"
+            )
+
+            await worker.queue_frame(
+                TTSSpeakFrame(follow_up)
+            )
+        print("Starting Pipecat Interview Agent...")
+        print(f"Opening Question: {first_question}")
+
+        await runner.run()
 
 
 if __name__ == "__main__":
