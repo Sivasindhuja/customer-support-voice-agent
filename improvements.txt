@@ -20,3 +20,4 @@ current goals:
 2.use a smaller LLM
 3.use frameworks
 
+decrease the context.

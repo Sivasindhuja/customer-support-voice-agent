@@ -1,68 +1,51 @@
 {
   "domain": "Software Engineer - Core Backend & Systems Architecture",
-  "languages_supported": ["en", "hi", "de"],
   "questions": [
     {
       "id": "q1",
       "question_en": "Can you explain the difference between a process and a thread, and how processes communicate with each other?",
-      "question_hi": "एक प्रोसेस और थ्रेड में क्या अंतर है, और प्रोसेस आपस में कैसे कम्युनिकेट करते हैं?",
-      "question_de": "Können Sie den Unterschied zwischen einem Prozess und einem Thread erklären und wie Prozesse miteinander kommunizieren?",
       "ideal_answer": "A process is an independent executing program with its own isolated memory space allocated by the OS, while a thread is a lightweight execution unit within a process that shares its parent process's memory space. Processes communicate via Inter-Process Communication (IPC) mechanisms like sockets, pipes, shared memory, or message queues.",
       "keywords": ["isolated memory", "shared memory", "IPC", "Inter-Process Communication", "sockets", "pipes"]
     },
     {
       "id": "q2",
       "question_en": "What is database normalization, and when would you intentionally denormalize a database schema?",
-      "question_hi": "डेटाबेस नॉर्मलाइजेशन क्या है, और आप जानबूझकर डेटाबेस स्कीमा को कब डिनॉर्मलाइज करेंगे?",
-      "question_de": "Was ist Datenbanknormalisierung und wann würden Sie ein Datenbankschema absichtlich denormalisieren?",
       "ideal_answer": "Normalization is the process of structuring a relational database to reduce data redundancy and improve data integrity (e.g., 1NF, 2NF, 3NF). Denormalization is intentionally introducing redundancy to optimize read performance by eliminating expensive JOIN operations in read-heavy analytical workloads or data warehouses.",
       "keywords": ["redundancy", "data integrity", "JOIN", "read performance", "read-heavy", "schema"]
     },
     {
       "id": "q3",
       "question_en": "How do horizontal scaling and vertical scaling differ, and how do you handle state when scaling horizontally?",
-      "question_hi": "हॉरिजॉन्टल स्केलिंग और वर्टिकल स्केलिंग में क्या अंतर है, और हॉरिजॉन्टल स्केल करते समय स्टेट को कैसे हैंडल किया जाता है?",
-      "question_de": "Wie unterscheiden sich horizontale und vertikale Skalierung und wie gehen Sie mit dem Status bei horizontaler Skalierung um?",
       "ideal_answer": "Vertical scaling (scaling up) means adding more power (CPU, RAM) to an existing machine, which has physical limits. Horizontal scaling (scaling out) means adding more machines to the pool. To scale horizontally, application servers must be stateless, offloading session state to a centralized store like Redis or a shared relational database.",
       "keywords": ["CPU", "RAM", "stateless", "centralized store", "Redis", "load balancer"]
     },
     {
       "id": "q4",
       "question_en": "Explain how a hash collision occurs in a hash map and how you would resolve it.",
-      "question_hi": "हैश मैप में हैश कोलिजन (collision) कैसे होता है और आप इसे कैसे हल करेंगे?",
-      "question_de": "Erklären Sie, wie eine Hash-Kollision in einer Hashmap auftritt und wie Sie diese lösen würden.",
       "ideal_answer": "A hash collision happens when two distinct keys produce the exact same hash index from a hash function. It is resolved using techniques like Chaining (where each slot in the array references a linked list or binary tree of colliding entries) or Open Addressing / Linear Probing (searching for the next available open slot in the array).",
       "keywords": ["hash function", "index", "chaining", "linked list", "open addressing", "linear probing"]
     },
     {
       "id": "q5",
       "question_en": "What are ACID properties in a database transaction, and why are they important?",
-      "question_hi": "डेटाबेस ट्रांजैक्शन में ACID प्रॉपर्टीज क्या हैं, और ये क्यों महत्वपूर्ण हैं?",
-      "question_de": "Was sind ACID-Eigenschaften in einer Datenbanktransaktion und warum sind sie wichtig?",
       "ideal_answer": "ACID stands for Atomicity (all operations succeed or all roll back), Consistency (database moves from one valid state to another), Isolation (concurrent transactions don't interfere), and Durability (committed data survives crashes). They guarantee data validity and reliability despite errors or failures.",
       "keywords": ["Atomicity", "Consistency", "Isolation", "Durability", "rollback", "data validity"]
     },
     {
       "id": "q6",
       "question_en": "Can you explain the difference between optimistic locking and pessimistic locking, and when to use each?",
-      "question_hi": "ऑप्टिमिस्टिक लॉकिंग और पैसिमिस्टिक लॉकिंग में क्या अंतर है, और दोनों का उपयोग कब किया जाता है?",
-      "question_de": "Können Sie den Unterschied zwischen optimistischem und pessimistischem Sperren erklären und wann welches zu verwenden ist?",
       "ideal_answer": "Optimistic locking assumes conflicts are rare; it checks if a record has been modified (usually via a version column) right before committing. Pessimistic locking assumes conflicts are frequent and explicitly locks the record (e.g., SELECT FOR UPDATE) to block others until the transaction ends. Use optimistic for low contention and pessimistic for high contention rows.",
       "keywords": ["version column", "SELECT FOR UPDATE", "contention", "lock", "concurrency"]
     },
     {
       "id": "q7",
       "question_en": "What is a cache stampede or thundering herd problem, and how do you prevent it?",
-      "question_hi": "कैश स्टैम्पीड (cache stampede) या थंडरिंग हर्ड प्रॉब्लम क्या है, और आप इसे कैसे रोकेंगे?",
-      "question_de": "Was ist das Cache-Stampede- oder Thundering-Herd-Problem und wie verhindern Sie es?",
       "ideal_answer": "A cache stampede happens when a highly popular cache key expires, causing multiple concurrent application requests to miss the cache simultaneously and fire identical heavy queries to the database, potentially crashing it. It is prevented using mutex locking (locking the database read so only one thread updates the cache) or background probabilistic early recomputation.",
       "keywords": ["expiration", "cache miss", "mutex locking", "concurrent requests", "recomputation"]
     },
     {
       "id": "q8",
       "question_en": "How do REST and RPC systems differ, and when would you favor gRPC over standard HTTP JSON REST?",
-      "question_hi": "REST और RPC सिस्टम में क्या अंतर है, और आप मानक HTTP JSON REST पर gRPC को प्राथमिकता कब देंगे?",
-      "question_de": "Wie unterscheiden sich REST- und RPC-Systeme und wann würden Sie gRPC gegenüber standardmäßigem HTTP JSON REST bevorzugen?",
       "ideal_answer": "REST is resource-oriented and uses standard HTTP methods (GET, POST) transmitting text-based payloads like JSON. RPC focuses on actions/procedures. gRPC should be favored over REST for high-performance internal microservice communication because it uses HTTP/2 for multiplexing and Protocol Buffers for highly compressed binary serialization.",
       "keywords": ["resource-oriented", "HTTP/2", "Protocol Buffers", "binary serialization", "microservices", "multiplexing"]
     }
