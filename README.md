@@ -36,6 +36,11 @@ The agent conducts a voice-based technical interview by:
 * Gemini 2.5 Flash
 
 ---
+# Architecture Note
+
+This document contains the trade offs and engineering descisions
+
+https://docs.google.com/document/d/12YcvrZX4_wZvH55hoHcKxt2DuKai6_ndk6qvlkAH7lQ/edit?usp=sharing
 
 # Project Structure
 
