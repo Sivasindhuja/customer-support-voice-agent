@@ -1,314 +1,187 @@
-# Voice Interview Agent
+#  Voice AI Mock Interviewer
 
-A realtime AI-powered mock interview agent built using Pipecat, LiveKit, Deepgram, and Gemini.
+A real-time conversational AI system that conducts technical mock interviews through voice, evaluates candidate responses against predefined technical expectations, asks contextual follow-up questions, and generates structured interview feedback.
 
-The agent conducts a voice-based technical interview by:
-
-* asking interview questions,
-* listening to candidate responses using speech-to-text,
-* evaluating responses against ideal reference answers,
-* asking follow-up questions,
-* and generating structured feedback at the end.
+> **Status:** Engineering Prototype
 
 ---
 
-# Features
+## Why This Project?
 
-* Realtime voice interaction
-* Speech-to-Text using Deepgram
-* Text-to-Speech using Deepgram Aura
-* LLM-powered interviewer using Gemini
-* Configurable interview dataset (JSON-based)
-* Grounded evaluation using ideal answers + keywords
-* Follow-up question handling
-* Final structured feedback generation
-* LiveKit realtime audio transport
-* Latency metrics logging
+Technical interviews evaluate much more than technical knowledge. Candidates are expected to communicate their ideas clearly, explain trade-offs, and think aloud under pressure. While coding platforms help practice problem solving, they rarely simulate the conversational nature of a real interview.
+
+This project explores how a Voice AI system can provide a realistic interview experience by combining speech recognition, large language models, and speech synthesis into a low-latency conversational pipeline.
 
 ---
 
-# Tech Stack
+## Features
 
-* Python 3.11
-* Pipecat
-* LiveKit
-* Deepgram
-* Gemini 2.5 Flash
+-  Real-time voice conversations
+-  Grounded technical interviewer using Gemini
+-  Context-aware follow-up questions
+-  Automated interview feedback
+-  Configurable interview dataset
+-  Latency metrics (STT, LLM TTFT, TTS TTFB)
+-  Configurable prompts and interview behavior
 
 ---
-# Architecture Note
 
-This document contains the trade offs and engineering descisions
+## System Overview
 
-https://docs.google.com/document/d/12YcvrZX4_wZvH55hoHcKxt2DuKai6_ndk6qvlkAH7lQ/edit?usp=sharing
+```
+Candidate
+     │
+     ▼
+ LiveKit
+     │
+     ▼
+ Deepgram STT
+     │
+     ▼
+ Gemini
+     │
+     ▼
+ Deepgram TTS
+     │
+     ▼
+ Candidate
+```
 
-# Project Structure
+---
 
-```text
-voice-agent/
-│
+## How It Works
+
+1. The candidate joins the interview room.
+2. The interviewer asks a technical question.
+3. The candidate answers using voice.
+4. Speech is transcribed using Deepgram STT.
+5. Gemini evaluates the response using the current question, ideal answer, and expected concepts.
+6. The interviewer asks a follow-up question or proceeds to the next question.
+7. After the interview, structured feedback is generated and saved.
+
+---
+
+## Repository Structure
+
+```
+Voice-AI-Mock-Interviewer/
+
 ├── app.py
 ├── config.json
 ├── interview_qa.json
-├── .env
 ├── requirements.txt
-└── interview_feedback.txt
+├── README.md
+└── docs/
 ```
 
 ---
 
-# Setup
+## Getting Started
 
-## 1. Clone Repository
+### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
-cd voice-agent
+git clone https://github.com/<username>/Voice-AI-Mock-Interviewer.git
+
+cd Voice-AI-Mock-Interviewer
 ```
 
----
-
-## 2. Create Virtual Environment
+### 2. Create a virtual environment
 
 ```bash
 python -m venv env
 ```
 
-Activate environment:
+Activate the environment.
 
-### Windows
+**Windows**
 
 ```bash
 env\Scripts\activate
 ```
 
-### Mac/Linux
+**macOS/Linux**
 
 ```bash
 source env/bin/activate
 ```
 
----
-
-## 3. Install Dependencies
+### 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Or manually:
+### 4. Configure environment variables
 
-```bash
-pip install pipecat-ai livekit-api deepgram-sdk python-dotenv
-```
-
----
-
-# API Keys Required
-
-You need:
-
-* Deepgram API Key
-* Gemini API Key
-* LiveKit Cloud Credentials
-
----
-
-# Environment Variables
-
-Create a `.env` file:
+Create a `.env` file.
 
 ```env
-DEEPGRAM_API_KEY=your_deepgram_key
+DEEPGRAM_API_KEY=
 
-GEMINI_API_KEY=your_gemini_key
+GEMINI_API_KEY=
 
-LIVEKIT_URL=wss://your-project.livekit.cloud
+LIVEKIT_URL=
 
-LIVEKIT_API_KEY=your_livekit_api_key
+LIVEKIT_API_KEY=
 
-LIVEKIT_API_SECRET=your_livekit_api_secret
+LIVEKIT_API_SECRET=
 ```
 
----
-
-# LiveKit Setup
-
-Create a project in LiveKit Cloud:
-
-https://cloud.livekit.io
-
-Copy:
-
-* WebSocket URL
-* API Key
-* API Secret
-
-Paste them into `.env`.
-
----
-
-# Running the Agent
-
-Start the application:
+### 5. Run the application
 
 ```bash
 python app.py
 ```
 
-You should see:
+---
 
-```text
-Connected to mock-interview-room
-LiveKitInputTransport started
-LiveKitOutputTransport started
-```
+## Technologies Used
+
+| Category | Technology |
+|----------|------------|
+| Language | Python 3.11 |
+| Voice Pipeline | Pipecat |
+| Transport | LiveKit |
+| Speech Recognition | Deepgram STT |
+| Speech Synthesis | Deepgram Aura |
+| LLM | Gemini 2.0 Flash |
+| Configuration | JSON |
 
 ---
 
-# Joining the Interview Room
+## Current Limitations
 
-Open LiveKit Meet:
-
-https://meet.livekit.io
-
-Enter:
-
-* your LiveKit server URL
-* room name:
-
-  ```text
-  mock-interview-room
-  ```
-
-Join the room.
-
-Once the participant joins:
-
-* the interview starts automatically,
-* the agent asks questions,
-* listens to answers,
-* and generates final feedback.
+- Fixed interview dataset
+- Basic follow-up strategy
+- Fixed response timeout
+- No persistent candidate memory
+- Prototype implementation
 
 ---
 
-# Configurable Interview Dataset
+## Documentation
 
-Interview questions are stored in:
+The README provides a high-level overview of the project.
 
-```text
-interview_qa.json
-```
+Detailed engineering documentation covering architecture, design decisions, prompt engineering, latency analysis, and future roadmap will be available on **GitHub Pages**.
 
-Example format:
-
-```json
-{
-  "id": "q1",
-  "question_en": "What is a REST API?",
-  "ideal_answer": "A REST API allows systems to communicate over HTTP using GET and POST.",
-  "keywords": ["HTTP", "GET", "POST"]
-}
-```
-
-You can:
-
-* add questions,
-* edit answers,
-* change domains,
-  without modifying application logic.
+> 🚧 Documentation website coming soon.
 
 ---
 
-# Feedback Generation
+## Future Work
 
-At the end of the interview, the system generates:
-
-* strengths,
-* improvement areas,
-* overall interview impression.
-
-Feedback is:
-
-* spoken by the agent,
-* and saved to:
-
-```text
-interview_feedback.txt
-```
+- Streaming LLM responses
+- Streaming TTS playback
+- Adaptive interviewer memory
+- Retrieval-backed question management
+- Recruiter dashboard
+- Interview analytics
+- Docker support
 
 ---
 
-# Current Limitations
+## Acknowledgements
 
-* Uses fixed wait times for responses
-* No multilingual support yet
-* No vector retrieval layer
-* Follow-up handling is basic
-* Designed as a prototype/demo system
-
----
-
-# Architecture Overview
-
-```text
-Candidate Speech
-        ↓
-Deepgram STT
-        ↓
-Pipecat Pipeline
-        ↓
-Gemini LLM
-        ↓
-Deepgram TTS
-        ↓
-Candidate Audio Output
-```
-
-The interview is grounded using:
-
-* ideal answers
-* keywords
-* configurable JSON datasets
-
----
-
-# Latency Metrics
-
-The system logs:
-
-* ASR latency
-* LLM time-to-first-token
-* TTS time-to-first-byte
-
-Useful for realtime voice agent optimization.
-
----
-
-# Demo Flow
-
-1. Candidate joins LiveKit room
-2. Agent asks interview question
-3. Candidate answers verbally
-4. Agent asks follow-up or next question
-5. Final feedback is generated
-
----
-
-# Future Improvements
-
-* Real semantic retrieval layer
-* Dynamic turn detection
-* Better follow-up reasoning
-* Multilingual interviews
-* Web frontend
-* Interview scoring dashboard
-
----
-
-# License
-
-MIT License
-
-```
-```
+This project was built to explore the engineering challenges involved in developing real-time Voice AI systems, including conversational state management, grounded LLM evaluation, prompt engineering, and latency optimization.
